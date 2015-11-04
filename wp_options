@@ -1,0 +1,50 @@
+#!/usr/bin/python2
+
+'''
+License Agremeent
+GPLv3 (http://www.gnu.org/licenses/gpl-3.0.txt)
+'''
+
+import re
+import os
+import sys
+import subprocess
+
+name = os.environ.get('WP_NAME', 'WordPress')
+prefix = os.environ.get('WP_PREFIX', 'wp')
+
+# Configuration
+if len(sys.argv) == 2 and sys.argv[1] == 'config':
+        print('''graph_category wordpress
+graph_title WordPress options
+graph_info Shows row count in all wp_options tables.
+graph_vlabel count''')
+
+if not os.environ.get('WP_PATH', False):
+        sys.exit(-1) # bzzz, no path set
+
+sql = "SELECT TABLE_SCHEMA, TABLE_NAME FROM information_schema.TABLES WHERE TABLE_NAME LIKE '%s\_%%\_options' OR TABLE_NAME = '%s_options'" % (prefix, prefix)
+tables = subprocess.check_output(['wp', '--skip-plugins', '--path=%s' % os.environ.get('WP_PATH'), '--no-color', 'db', 'query', sql])
+
+regex = re.compile(ur'^([^\s]+)\s+(%s_(?:\d+_)?options)' % prefix, re.MULTILINE)
+tables = re.findall(regex, tables)
+total = 0
+
+for schema, table in tables:
+	count = 0
+
+	if len(sys.argv) == 2 and sys.argv[1] == 'config':
+		print '%s_%s.info %s.%s' % (schema, table, schema, table)
+		print '%s_%s.label %s.%s' % (schema, table, schema, table)
+	else:
+		sql = "SELECT COUNT(*) FROM %s.%s;" % (schema, table)
+		count = subprocess.check_output(['wp', '--skip-plugins', '--path=%s' % os.environ.get('WP_PATH'), '--no-color', 'db', 'query', sql])
+		count = int(re.findall('^(\d+)', count, re.MULTILINE)[0])
+		print '%s_%s.value %d' % (schema, table, count)
+		total += count
+
+if len(sys.argv) == 2 and sys.argv[1] == 'config':
+	print 'total.info Total'
+	print 'total.label total'
+else:
+	print 'total.value %d' % total
